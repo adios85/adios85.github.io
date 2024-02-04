@@ -14,16 +14,6 @@ function openPanel(element) {
 	}
 };
 
-function listenDestroy() {
-	document.removeEventListener("keydown", listenHotkeys);
-	Lampa.menu.listener.remove('destroy', listenDestroy);	
-};
-
-function startHotkeys() {
-	document.addEventListener("keydown", listenHotkeys);
-	Lampa.menu.listener.follow('destroy', listenDestroy);
-};
-
 function listenHotkeys(e) {
 
 //log('Hotkeys', e.keyCode);
