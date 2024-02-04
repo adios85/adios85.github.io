@@ -16,12 +16,12 @@ function openPanel(element) {
 
 function listenDestroy() {
 	document.removeEventListener("keydown", listenHotkeys);
-	Lampa.Player.listener.remove('destroy', listenDestroy);	
+	Lampa.menu.listener.remove('destroy', listenDestroy);	
 };
 
 function startHotkeys() {
 	document.addEventListener("keydown", listenHotkeys);
-	Lampa.Player.listener.follow('destroy', listenDestroy);
+	Lampa.menu.listener.follow('destroy', listenDestroy);
 };
 
 function listenHotkeys(e) {
