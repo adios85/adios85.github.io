@@ -404,7 +404,7 @@ function startPlugin() {
         log("[PERSON-PLUGIN] Checking current activity on startup");  
         var activity = Lampa.Activity.active();  
           
-        if (activity && activity.component === 'person') {  
+        if (activity && activity.component === 'actor') {  
             log("[PERSON-PLUGIN] Current activity is actor page");  
               
             // Получаем ID из разных возможных источников  
