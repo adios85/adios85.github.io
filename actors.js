@@ -1,26 +1,39 @@
 (function () {
 "use strict";
 
-var PLUGIN = "persons_plugin";
-var STORAGE = "persons_plugin_ids";
+var PLUGIN = 'persons_plugin';
+var STORAGE = 'persons_plugin_ids';
+var CACHE = 'persons_plugin_cache';
 var PAGE_SIZE = 20;
 
-function getIds(){
-    return Lampa.Storage.get(STORAGE, []);
+function ids(){
+    return Lampa.Storage.get(STORAGE,[]);
+}
+
+function save(ids){
+    Lampa.Storage.set(STORAGE,ids);
 }
 
 function toggle(id){
-    var ids = getIds();
-    var i = ids.indexOf(id);
+    var list = ids();
+    var i = list.indexOf(id);
 
-    if(i == -1) ids.push(id);
-    else ids.splice(i,1);
+    if(i == -1) list.push(id);
+    else list.splice(i,1);
 
-    Lampa.Storage.set(STORAGE, ids);
+    save(list);
 }
 
 function subscribed(id){
-    return getIds().indexOf(id) !== -1;
+    return ids().indexOf(id) !== -1;
+}
+
+function cache(){
+    return Lampa.Storage.get(CACHE,{});
+}
+
+function saveCache(c){
+    Lampa.Storage.set(CACHE,c);
 }
 
 function addButton(id){
@@ -35,6 +48,7 @@ function addButton(id){
     if(block.querySelector('.persons-plugin-btn')) return;
 
     var btn = document.createElement('div');
+
     btn.className = 'full-start__button selector persons-plugin-btn';
     btn.setAttribute('data-focusable','true');
 
@@ -42,7 +56,7 @@ function addButton(id){
         btn.innerHTML = '<span>'+(subscribed(id) ? 'Отписаться' : 'Подписаться')+'</span>';
     }
 
-    btn.addEventListener('hover:enter', function(){
+    btn.addEventListener('hover:enter',function(){
         toggle(id);
         render();
     });
@@ -56,27 +70,36 @@ function PersonsService(){
     this.list = function(params, onComplete){
 
         var page = params.page || 1;
-        var ids = getIds();
+        var list = ids();
 
         var start = (page-1)*PAGE_SIZE;
         var end = start + PAGE_SIZE;
 
-        var pageIds = ids.slice(start,end);
+        var pageIds = list.slice(start,end);
+
+        var results = [];
+        var loaded = 0;
+
+        var c = cache();
 
         if(!pageIds.length){
             onComplete({
-                results: [],
-                page: page,
-                total_pages: Math.ceil(ids.length/PAGE_SIZE),
-                total_results: ids.length
+                results:[],
+                page:page,
+                total_pages:Math.ceil(list.length/PAGE_SIZE),
+                total_results:list.length
             });
             return;
         }
 
-        var loaded = 0;
-        var results = [];
-
         pageIds.forEach(function(id){
+
+            if(c[id]){
+                results.push(c[id]);
+                loaded++;
+                if(loaded == pageIds.length) finish();
+                return;
+            }
 
             var url = Lampa.TMDB.api(
                 'person/'+id+
@@ -84,48 +107,51 @@ function PersonsService(){
                 '&language='+Lampa.Storage.get('language','ru')
             );
 
-            new Lampa.Request().silent(url,function(r){
+            Lampa.Request.silent(url,function(r){
 
-                var json = typeof r == 'string' ? JSON.parse(r) : r;
+                var json = typeof r === 'string' ? JSON.parse(r) : r;
 
-                results.push({
+                var card = {
                     id: json.id,
                     title: json.name,
                     name: json.name,
                     poster_path: json.profile_path,
-                    type: "person",
-                    card_type: "person",
-                    source: "tmdb"
-                });
+                    type: 'person',
+                    card_type: 'person',
+                    source: 'tmdb'
+                };
+
+                c[id] = card;
+                results.push(card);
 
                 loaded++;
 
-                if(loaded === pageIds.length){
-                    onComplete({
-                        results: results,
-                        page: page,
-                        total_pages: Math.ceil(ids.length/PAGE_SIZE),
-                        total_results: ids.length
-                    });
-                }
+                if(loaded == pageIds.length) finish();
 
             },function(){
                 loaded++;
+                if(loaded == pageIds.length) finish();
             });
 
         });
+
+        function finish(){
+
+            saveCache(c);
+
+            onComplete({
+                results:results,
+                page:page,
+                total_pages:Math.ceil(list.length/PAGE_SIZE),
+                total_results:list.length
+            });
+
+        }
 
     };
 }
 
 function start(){
-
-    Lampa.Lang.add({
-        persons_plugin_title:{
-            ru:'Персоны',
-            en:'Persons'
-        }
-    });
 
     Lampa.Api.sources[PLUGIN] = new PersonsService();
 
@@ -156,7 +182,7 @@ function start(){
 
             setTimeout(function(){
                 addButton(id);
-            },500);
+            },300);
 
         }
 
