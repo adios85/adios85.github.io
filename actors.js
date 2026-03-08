@@ -1,7 +1,7 @@
 !function() {
     "use strict";
 
-    // Конфигурация
+    // ================== КОНФИГУРАЦИЯ ==================
     var PLUGIN_NAME = "persons_plugin";
     var PERSONS_KEY = "saved_persons";
     var PAGE_SIZE = 20;
@@ -54,24 +54,25 @@
             he: "לא נמצאו אנשים",
             cs: "Nebyly nalezeny žádné osoby",
             bg: "Не са намерени хора"
-        }
+        },
+        biography: { ru: "Биография", en: "Biography", uk: "Біографія", be: "Біяграфія", pt: "Biografia", zh: "传记", he: "ביוגרפיה", cs: "Životopis", bg: "Биография" },
+        known_for: { ru: "Известен по", en: "Known for", uk: "Відомий за", be: "Вядомы па", pt: "Conhecido por", zh: "知名于", he: "ידוע בשל", cs: "Známý díky", bg: "Известен с" }
     };
 
-    // Иконка для меню
     var ICON_SVG = '<svg height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16 11C17.66 11 18.99 9.66 18.99 8C18.99 6.34 17.66 5 16 5C14.34 5 13 6.34 13 8C13 9.66 14.34 11 16 11ZM8 11C9.66 11 10.99 9.66 10.99 8C10.99 6.34 9.66 5 8 5C6.34 5 5 6.34 5 8C5 9.66 6.34 11 8 11ZM8 13C5.67 13 1 14.17 1 16.5V19H15V16.5C15 14.17 10.33 13 8 13ZM16 13C15.71 13 15.38 13.02 15.03 13.05C16.19 13.89 17 15.02 17 16.5V19H23V16.5C23 14.17 18.33 13 16 13Z" fill="currentColor"/></svg>';
 
-    // Логирование
+    // ================== ЛОГИРОВАНИЕ ==================
     function log() { if (my_logging && console && console.log) { try { console.log.apply(console, arguments); } catch (e) {} } }
     function error() { if (my_logging && console && console.error) { try { console.error.apply(console, arguments); } catch (e) {} } }
 
-    // Работа с хранилищем
+    // ================== ХРАНИЛИЩЕ ==================
     function getCurrentLanguage() { return localStorage.getItem('language') || 'en'; }
     function initStorage() { var current = Lampa.Storage.get(PERSONS_KEY); if (!current || current.length === 0) { Lampa.Storage.set(PERSONS_KEY, DEFAULT_PERSON_IDS); } }
     function getPersonIds() { return Lampa.Storage.get(PERSONS_KEY, []); }
     function togglePersonSubscription(personId) { var personIds = getPersonIds(); var index = personIds.indexOf(personId); if (index === -1) { personIds.push(personId); } else { personIds.splice(index, 1); } Lampa.Storage.set(PERSONS_KEY, personIds); return index === -1; }
     function isPersonSubscribed(personId) { return getPersonIds().includes(personId); }
 
-    // --- Кнопка подписки на странице актёра (без изменений) ---
+    // ================== КНОПКА ПОДПИСКИ (для страницы актёра) ==================
     function addButtonToContainer(bottomBlock) {
         log("[PERSON-PLUGIN] Container found, adding button");
         var existingButton = bottomBlock.querySelector('.button--subscribe-plugin');
@@ -107,7 +108,6 @@
         }
     }
     function updatePersonsList() {
-        // При обновлении подписки перезагружаем наш компонент, если он активен
         var activity = Lampa.Activity.active();
         if (activity && activity.component === 'persons_list') {
             Lampa.Activity.reload();
@@ -119,10 +119,8 @@
         var style = document.createElement('style'); style.id = 'subscribe-button-styles'; style.textContent = css; document.head.appendChild(style);
     }
 
-    // --- Собственный компонент для списка персон ---
-    function PersonsListComponent() {
-        // Этот компонент будет зарегистрирован в Lampa.Component
-    }
+    // ================== КОМПОНЕНТ СПИСКА ПЕРСОН ==================
+    function PersonsListComponent() {}
 
     PersonsListComponent.prototype = {
         constructor: PersonsListComponent,
@@ -135,7 +133,6 @@
             var pageIds = personIds.slice(start, end);
             var totalPages = Math.ceil(personIds.length / PAGE_SIZE);
 
-            // Создаём корневой элемент
             var container = document.createElement('div');
             container.className = 'category full-start persons-list';
 
@@ -153,11 +150,10 @@
                 return container;
             }
 
-            // Сетка карточек
+            // Сетка
             var items = document.createElement('div');
             items.className = 'category__items';
 
-            // Загружаем данные каждой персоны
             var loaded = 0;
             var currentLang = getCurrentLanguage();
 
@@ -179,12 +175,9 @@
                         }
                         loaded++;
                         if (loaded === pageIds.length) {
-                            // Все карточки добавлены, можно вставлять в контейнер
                             container.appendChild(items);
-                            // Добавляем пагинацию, если нужно
                             if (totalPages > 1) {
-                                var pagination = createPagination(page, totalPages);
-                                container.appendChild(pagination);
+                                container.appendChild(createPagination(page, totalPages));
                             }
                         }
                     }, function() {
@@ -192,15 +185,13 @@
                         if (loaded === pageIds.length) {
                             container.appendChild(items);
                             if (totalPages > 1) {
-                                var pagination = createPagination(page, totalPages);
-                                container.appendChild(pagination);
+                                container.appendChild(createPagination(page, totalPages));
                             }
                         }
                     });
                 })(i);
             }
 
-            // Если страница пустая (все запросы ещё не завершились), показываем прелоадер
             if (pageIds.length > 0) {
                 var loader = document.createElement('div');
                 loader.className = 'category__preloader';
@@ -211,7 +202,7 @@
         }
     };
 
-    // Функция создания карточки персоны
+    // Функция создания карточки
     function createPersonCard(json) {
         var card = document.createElement('div');
         card.className = 'category__card persons-list__card selector';
@@ -226,36 +217,156 @@
                         '<div class="category__card-title">' + json.name + '</div>' +
                         (json.known_for_department ? '<div class="category__card-subtitle">' + json.known_for_department + '</div>' : '');
 
-        // Обработчик клика
-        card.addEventListener('hover:enter', function(e) {
+        // ===== ОБРАБОТЧИК КЛИКА =====
+        var clickHandler = function(e) {
             e.stopPropagation();
             e.preventDefault();
-            log("[PERSON-PLUGIN] Custom component click: open actor", json.id);
-            Lampa.Activity.push({
-                component: "actor",
-                id: json.id,
-                title: json.name,
-                params: { id: json.id, name: json.name }
-            });
-            return false;
-        });
+            log("[PERSON-PLUGIN] Click on card for person", json.id, json.name);
 
-        card.addEventListener('click', function(e) {
-            e.stopPropagation();
-            e.preventDefault();
-            Lampa.Activity.push({
-                component: "actor",
-                id: json.id,
-                title: json.name,
-                params: { id: json.id, name: json.name }
-            });
+            // Пытаемся открыть страницу актёра всеми возможными способами
+            var attempts = [
+                { component: 'actor', id: json.id },
+                { component: 'person', id: json.id },
+                { component: 'actor', id: json.id, params: { id: json.id } }
+            ];
+
+            var attemptIndex = 0;
+            function tryNext() {
+                if (attemptIndex < attempts.length) {
+                    var attempt = attempts[attemptIndex];
+                    log("[PERSON-PLUGIN] Attempt", attemptIndex+1, "with component:", attempt.component);
+                    Lampa.Activity.push(attempt, true); // replace=true
+                    attemptIndex++;
+                    setTimeout(function() {
+                        var active = Lampa.Activity.active();
+                        if (!active || (active.component !== attempt.component && active.component !== 'actor' && active.component !== 'person')) {
+                            log("[PERSON-PLUGIN] Attempt failed, trying next");
+                            tryNext();
+                        } else {
+                            log("[PERSON-PLUGIN] Successfully opened", active.component);
+                        }
+                    }, 500);
+                } else {
+                    // Ничего не сработало — показываем детальную информацию внутри плагина
+                    log("[PERSON-PLUGIN] All attempts failed, showing details in plugin");
+                    showPersonDetails(json);
+                }
+            }
+
+            tryNext();
             return false;
-        });
+        };
+
+        card.addEventListener('hover:enter', clickHandler);
+        card.addEventListener('click', clickHandler);
 
         return card;
     }
 
-    // Функция создания пагинации
+    // Функция для отображения детальной информации о персоне внутри плагина
+    function showPersonDetails(json) {
+        // Загружаем полную информацию (биография, фильмы)
+        var currentLang = getCurrentLanguage();
+        var path = 'person/' + json.id + '?api_key=' + Lampa.TMDB.key() + '&language=' + currentLang + '&append_to_response=movie_credits';
+        var url = Lampa.TMDB.api(path);
+
+        new Lampa.Reguest().silent(url, function(response) {
+            try {
+                var data = typeof response === 'string' ? JSON.parse(response) : response;
+                if (!data || !data.id) return;
+
+                var container = document.createElement('div');
+                container.className = 'full-start person-details';
+
+                // Шапка с кнопкой назад
+                var header = document.createElement('div');
+                header.className = 'full-start__header';
+                header.innerHTML = '<div class="full-start__back selector" data-focusable="true">◀</div>' +
+                                  '<div class="full-start__title">' + data.name + '</div>';
+                container.appendChild(header);
+
+                // Постер и основная информация
+                var content = document.createElement('div');
+                content.className = 'full-start__content';
+
+                var posterDiv = document.createElement('div');
+                posterDiv.className = 'person-details__poster';
+                var poster = data.profile_path ? '<img src="https://image.tmdb.org/t/p/w300' + data.profile_path + '">' : '<div class="person-details__noimage">?</div>';
+                posterDiv.innerHTML = poster;
+                content.appendChild(posterDiv);
+
+                var infoDiv = document.createElement('div');
+                infoDiv.className = 'person-details__info';
+                infoDiv.innerHTML = '<div><b>' + Lampa.Lang.translate('biography') + ':</b> ' + (data.biography || '—') + '</div>' +
+                                   (data.birthday ? '<div><b>Дата рождения:</b> ' + data.birthday + '</div>' : '') +
+                                   (data.place_of_birth ? '<div><b>Место рождения:</b> ' + data.place_of_birth + '</div>' : '') +
+                                   (data.deathday ? '<div><b>Дата смерти:</b> ' + data.deathday + '</div>' : '') +
+                                   '<div><b>' + Lampa.Lang.translate('known_for') + ':</b> ' + (data.known_for_department || '—') + '</div>';
+                content.appendChild(infoDiv);
+
+                container.appendChild(content);
+
+                // Известные фильмы
+                if (data.movie_credits && data.movie_credits.cast && data.movie_credits.cast.length > 0) {
+                    var moviesTitle = document.createElement('div');
+                    moviesTitle.className = 'full-start__title';
+                    moviesTitle.textContent = 'Известные фильмы';
+                    container.appendChild(moviesTitle);
+
+                    var moviesGrid = document.createElement('div');
+                    moviesGrid.className = 'category__items';
+                    var cast = data.movie_credits.cast.slice(0, 10); // первые 10
+                    for (var i = 0; i < cast.length; i++) {
+                        var movie = cast[i];
+                        var movieCard = document.createElement('div');
+                        movieCard.className = 'category__card selector';
+                        movieCard.setAttribute('data-id', movie.id);
+                        movieCard.setAttribute('data-focusable', 'true');
+                        var moviePoster = movie.poster_path ? '<img src="https://image.tmdb.org/t/p/w185' + movie.poster_path + '">' : '<div class="category__card--noimage">🎬</div>';
+                        movieCard.innerHTML = '<div class="category__card-poster">' + moviePoster + '</div>' +
+                                             '<div class="category__card-title">' + movie.title + '</div>' +
+                                             (movie.release_date ? '<div class="category__card-subtitle">' + movie.release_date.slice(0,4) + '</div>' : '');
+                        movieCard.addEventListener('hover:enter', function(e) {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            Lampa.Activity.push({ component: 'movie', id: this.getAttribute('data-id') });
+                            return false;
+                        });
+                        moviesGrid.appendChild(movieCard);
+                    }
+                    container.appendChild(moviesGrid);
+                }
+
+                // Кнопка назад
+                var back = header.querySelector('.full-start__back');
+                if (back) {
+                    back.addEventListener('hover:enter', function() {
+                        Lampa.Activity.back();
+                    });
+                }
+
+                // Заменяем текущее содержимое на детали
+                var activity = Lampa.Activity.active();
+                if (activity && activity.component === 'persons_list') {
+                    Lampa.Activity.replace({ component: 'persons_list', page: activity.page }, true);
+                    // Показываем детали поверх (или можно просто перерисовать)
+                    // Но проще сделать так: отрендерить детали и поместить их поверх
+                    // Для этого нужно найти корневой элемент текущей активности
+                    setTimeout(function() {
+                        var root = document.querySelector('.persons-list');
+                        if (root && root.parentNode) {
+                            root.parentNode.innerHTML = ''; // грубо, но для примера
+                            root.parentNode.appendChild(container);
+                        }
+                    }, 100);
+                }
+            } catch (e) {
+                error("[PERSON-PLUGIN] Error showing details", e);
+            }
+        });
+    }
+
+    // Пагинация
     function createPagination(currentPage, totalPages) {
         var pagination = document.createElement('div');
         pagination.className = 'full-start__pagination';
@@ -265,10 +376,7 @@
         prev.textContent = '◀';
         if (currentPage > 1) {
             prev.addEventListener('hover:enter', function() {
-                Lampa.Activity.push({
-                    component: 'persons_list',
-                    page: currentPage - 1
-                }, true); // replace=true
+                Lampa.Activity.push({ component: 'persons_list', page: currentPage - 1 }, true);
             });
         }
         pagination.appendChild(prev);
@@ -283,10 +391,7 @@
         next.textContent = '▶';
         if (currentPage < totalPages) {
             next.addEventListener('hover:enter', function() {
-                Lampa.Activity.push({
-                    component: 'persons_list',
-                    page: currentPage + 1
-                }, true);
+                Lampa.Activity.push({ component: 'persons_list', page: currentPage + 1 }, true);
             });
         }
         pagination.appendChild(next);
@@ -294,37 +399,33 @@
         return pagination;
     }
 
-    // --- Запуск плагина ---
+    // ================== ЗАПУСК ПЛАГИНА ==================
     function startPlugin() {
-        // Добавляем переводы
         Lampa.Lang.add({
             persons_plugin_title: pluginTranslations.persons_title,
             persons_plugin_subscribe: pluginTranslations.subscribe,
             persons_plugin_unsubscribe: pluginTranslations.unsubscribe,
             persons_plugin_not_found: pluginTranslations.persons_not_found,
-            persons_title: pluginTranslations.persons_title
+            persons_title: pluginTranslations.persons_title,
+            biography: pluginTranslations.biography,
+            known_for: pluginTranslations.known_for
         });
 
         initStorage();
 
-        // Регистрируем наш собственный компонент
+        // Регистрируем компонент
         Lampa.Component.add('persons_list', new PersonsListComponent());
 
-        // Создаём пункт меню
+        // Пункт меню
         var menuItem = $(
             '<li class="menu__item selector" data-action="persons_list">' +
                 '<div class="menu__ico">' + ICON_SVG + '</div>' +
                 '<div class="menu__text">' + Lampa.Lang.translate('persons_plugin_title') + '</div>' +
             '</li>'
         );
-
         menuItem.on("hover:enter", function() {
-            Lampa.Activity.push({
-                component: "persons_list",
-                page: 1
-            });
+            Lampa.Activity.push({ component: "persons_list", page: 1 });
         });
-
         $(".menu .menu__list").eq(0).append(menuItem);
 
         // Обработчики для страницы актёра (кнопка подписки)
@@ -353,7 +454,7 @@
         function checkCurrentActivity() {
             log("[PERSON-PLUGIN] Checking current activity");
             var activity = Lampa.Activity.active();
-            if (activity && activity.component === 'actor') {
+            if (activity && (activity.component === 'actor' || activity.component === 'person')) {
                 log("[PERSON-PLUGIN] Current activity is actor page");
                 if (activity.id) {
                     currentPersonId = parseInt(activity.id, 10);
@@ -378,7 +479,7 @@
 
         Lampa.Listener.follow('activity', function(e) {
             log("[PERSON-PLUGIN] Activity event:", e.type, e.component);
-            if (e.type === 'start' && e.component === 'actor') {
+            if (e.type === 'start' && (e.component === 'actor' || e.component === 'person')) {
                 if (e.object && e.object.id) {
                     currentPersonId = parseInt(e.object.id, 10);
                     log("[PERSON-PLUGIN] Actor ID:", currentPersonId);
