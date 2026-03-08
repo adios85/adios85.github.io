@@ -7,7 +7,7 @@
     var PAGE_SIZE = 20;  
     var DEFAULT_PERSON_IDS = [];  
     var currentPersonId = null;  
-    var my_logging = true; // Включено для отладки
+    var my_logging = true; // Держим включённым для отладки
 
     // Переводы
     var pluginTranslations = {  
@@ -19,19 +19,17 @@
 
     var ICON_SVG = '<svg height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16 11C17.66 11 18.99 9.66 18.99 8C18.99 6.34 17.66 5 16 5C14.34 5 13 6.34 13 8C13 9.66 14.34 11 16 11ZM8 11C9.66 11 10.99 9.66 10.99 8C10.99 6.34 9.66 5 8 5C6.34 5 5 6.34 5 8C5 9.66 6.34 11 8 11ZM8 13C5.67 13 1 14.17 1 16.5V19H15V16.5C15 14.17 10.33 13 8 13ZM16 13C15.71 13 15.38 13.02 15.03 13.05C16.19 13.89 17 15.02 17 16.5V19H23V16.5C23 14.17 18.33 13 16 13Z" fill="currentColor"/></svg>';  
 
-    // Логирование  
     function log() { if (my_logging && console && console.log) { try { console.log.apply(console, arguments); } catch (e) {} } }  
     function error() { if (my_logging && console && console.error) { try { console.error.apply(console, arguments); } catch (e) {} } }  
 
-    // Работа с хранилищем  
     function getCurrentLanguage() { return localStorage.getItem('language') || 'en'; }  
     function initStorage() { var current = Lampa.Storage.get(PERSONS_KEY); if (!current || current.length === 0) { Lampa.Storage.set(PERSONS_KEY, DEFAULT_PERSON_IDS); } }  
     function getPersonIds() { return Lampa.Storage.get(PERSONS_KEY, []); }  
     function togglePersonSubscription(personId) { var personIds = getPersonIds(); var index = personIds.indexOf(personId); if (index === -1) { personIds.push(personId); } else { personIds.splice(index, 1); } Lampa.Storage.set(PERSONS_KEY, personIds); return index === -1; }  
     function isPersonSubscribed(personId) { return getPersonIds().includes(personId); }  
 
-    // Кнопка подписки (без изменений)  
-    function addButtonToContainer(bottomBlock) { /* ... код кнопки без изменений ... */ 
+    // Кнопка подписки (без изменений, оставляем как есть)
+    function addButtonToContainer(bottomBlock) {  
         log("[PERSON-PLUGIN] Container found, adding button");  
         var existingButton = bottomBlock.querySelector('.button--subscribe-plugin');  
         if (existingButton && existingButton.parentNode) existingButton.parentNode.removeChild(existingButton);  
@@ -55,7 +53,7 @@
         log("[PERSON-PLUGIN] Button added successfully");  
         return button;  
     }  
-    function addSubscribeButton() { /* ... без изменений ... */ 
+    function addSubscribeButton() {  
         if (!currentPersonId) { error("[PERSON-PLUGIN] Cannot add button: currentPersonId is null"); return; }  
         var bottomBlock = document.querySelector('.person-start__bottom');  
         if (bottomBlock) { addButtonToContainer(bottomBlock); } else {  
@@ -68,17 +66,15 @@
     function updatePersonsList() { var activity = Lampa.Activity.active(); if (activity && activity.component === 'category_full' && activity.source === PLUGIN_NAME) { log("[PERSON-PLUGIN] Updating persons list"); Lampa.Activity.reload(); } }  
     function addButtonStyles() { if (document.getElementById('subscribe-button-styles')) return; var css = '.full-start__button.selector.button--subscribe-plugin.button--subscribe { color: #4CAF50; } .full-start__button.selector.button--subscribe-plugin.button--unsubscribe { color: #F44336; }'; var style = document.createElement('style'); style.id = 'subscribe-button-styles'; style.textContent = css; document.head.appendChild(style); }  
 
-    // Сервис персон (ИСПРАВЛЕННАЯ ВЕРСИЯ)  
+    // ================== ОСНОВНОЙ СЕРВИС (ПЕРЕРАБОТАН) ==================
     function PersonsService() {  
         var self = this;  
         var cache = {};  
 
-        // Метод list (возвращает список подписок)  
         this.list = function(params, onComplete, onError) {  
             var page = parseInt(params.page, 10) || 1;  
             var startIndex = (page - 1) * PAGE_SIZE;  
             var endIndex = startIndex + PAGE_SIZE;  
-
             var personIds = getPersonIds();  
             var pageIds = personIds.slice(startIndex, endIndex);  
 
@@ -111,44 +107,67 @@
                             var json = typeof response === 'string' ? JSON.parse(response) : response;  
 
                             if (json && json.id) {  
-                                // *** ОСНОВНОЕ ИЗМЕНЕНИЕ ***
-                                // Создаём базовый объект, но без автоматической навигации
+                                // Создаём "чистый" объект персоны без полей, которые могут быть интерпретированы как фильм
                                 var personCard = {  
                                     id: json.id,  
                                     title: json.name,  
                                     name: json.name,  
                                     poster_path: json.profile_path,  
                                     profile_path: json.profile_path,  
-                                    type: "person", // Важно! Не "movie"
-                                    media_type: "person", // Важно!
-                                    source: "tmdb",
-                                    // Убираем component и любые другие поля, которые могут быть неверно истолкованы
+                                    // Критически важно: type и media_type должны быть "person"
+                                    type: "person",  
+                                    media_type: "person",  
+                                    source: "tmdb",  
+                                    // Доп. поля, не влияющие на тип
                                     known_for_department: json.known_for_department,  
                                     gender: json.gender || 0,  
-                                    popularity: json.popularity || 0
+                                    popularity: json.popularity || 0  
                                 };  
 
-                                // **КРИТИЧЕСКИ ВАЖНО: ПЕРЕОПРЕДЕЛЯЕМ onclick**
-                                // Удаляем любой существующий onclick, который мог бы добавить Lampac
-                                if (personCard.onclick) {
-                                    delete personCard.onclick;
-                                }
-                                
-                                // Устанавливаем ТОЛЬКО наш обработчик
-                                personCard.onclick = function() {  
-                                    log("[PERSON-PLUGIN] --- MANUAL CLICK --- Person:", json.id, json.name);  
-                                    Lampa.Activity.push({  
-                                        component: "actor", // Или "person", если "actor" не работает
-                                        id: json.id,  
-                                        title: json.name,  
-                                        params: {  
-                                            id: json.id,  
-                                            name: json.name
-                                        }  
-                                    });  
-                                    // Возвращаем false, чтобы предотвратить дальнейшее всплытие события
-                                    return false;  
-                                };  
+                                // Удаляем любые возможные поля, которые могли бы остаться от предыдущих версий
+                                if (personCard.component) delete personCard.component;  
+                                if (personCard.action) delete personCard.action;  
+                                if (personCard.url) delete personCard.url;  
+
+                                // ===== НАДЁЖНЫЙ ОБРАБОТЧИК КЛИКА =====
+                                // Используем Object.defineProperty, чтобы сделать свойство неперезаписываемым
+                                Object.defineProperty(personCard, 'onclick', {
+                                    configurable: false, // Запрещаем удаление или изменение
+                                    enumerable: true,
+                                    value: function(originalEvent) {
+                                        log("[PERSON-PLUGIN] ====== MANUAL CLICK (HARD OVERRIDE) ======", json.id, json.name);
+                                        
+                                        // Пытаемся предотвратить любые дальнейшие действия
+                                        if (originalEvent) {
+                                            try { originalEvent.stopPropagation(); } catch(e) {}
+                                            try { originalEvent.preventDefault(); } catch(e) {}
+                                        }
+                                        
+                                        // Пробуем открыть компонент person (наиболее вероятный)
+                                        Lampa.Activity.push({
+                                            component: "person",  // сначала пробуем person
+                                            id: json.id,
+                                            title: json.name,
+                                            params: { id: json.id, name: json.name }
+                                        });
+                                        
+                                        // Если через 300 мс компонент person не открылся (проверим по активности), пробуем actor
+                                        setTimeout(function() {
+                                            var active = Lampa.Activity.active();
+                                            if (!active || (active.component !== 'person' && active.component !== 'actor')) {
+                                                log("[PERSON-PLUGIN] Person component failed, trying actor");
+                                                Lampa.Activity.push({
+                                                    component: "actor",
+                                                    id: json.id,
+                                                    title: json.name,
+                                                    params: { id: json.id, name: json.name }
+                                                });
+                                            }
+                                        }, 300);
+                                        
+                                        return false; // дополнительная защита
+                                    }
+                                });
 
                                 cache[personId] = personCard;  
                                 results.push(personCard);  
@@ -176,7 +195,7 @@
             }  
         };  
 
-        // Метод get (без изменений, но может и не понадобиться)  
+        // Метод get (оставляем для совместимости, но он вряд ли понадобится)
         this.get = function(params, onComplete, onError) {  
             var id = params.id;  
             var currentLang = getCurrentLanguage();  
@@ -189,7 +208,7 @@
                     if (json && json.id) {  
                         onComplete({  
                             id: json.id, title: json.name, name: json.name, poster_path: json.profile_path, profile_path: json.profile_path,  
-                            type: "person", media_type: "person", source: "tmdb", component: "actor",  
+                            type: "person", media_type: "person", source: "tmdb",  
                             known_for_department: json.known_for_department, gender: json.gender || 0, popularity: json.popularity || 0,  
                             biography: json.biography || '', birthday: json.birthday || '', deathday: json.deathday || '', place_of_birth: json.place_of_birth || ''  
                         });  
@@ -211,14 +230,14 @@
         menuItem.on("hover:enter", function() { Lampa.Activity.push({ component: "category_full", source: PLUGIN_NAME, title: Lampa.Lang.translate('persons_plugin_title'), page: 1, url: PLUGIN_NAME + '__main' }); });  
         $(".menu .menu__list").eq(0).append(menuItem);  
 
-        // Функции для страницы актёра (без изменений)  
-        function waitForContainer(callback) { /* ... */ 
+        // Вспомогательные функции для страницы актёра (без изменений)  
+        function waitForContainer(callback) {  
             log("[PERSON-PLUGIN] Waiting for container...");  
             var attempts = 0, maxAttempts = 15, containerSelector = '.person-start__bottom';  
             function check() { attempts++; var container = document.querySelector(containerSelector); if (container) { log("[PERSON-PLUGIN] Container found after", attempts, "attempts"); callback(); } else if (attempts < maxAttempts) { setTimeout(check, 200); } else { error("[PERSON-PLUGIN] Container not found after max attempts"); } }  
             if (document.querySelector(containerSelector)) { callback(); } else { setTimeout(check, 300); }  
         }  
-        function checkCurrentActivity() { /* ... */ 
+        function checkCurrentActivity() {  
             log("[PERSON-PLUGIN] Checking current activity");  
             var activity = Lampa.Activity.active();  
             if (activity && activity.component === 'actor') {  
