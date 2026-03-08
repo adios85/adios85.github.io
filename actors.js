@@ -7,8 +7,8 @@ var PERSONS_KEY = "saved_persons";
 var PAGE_SIZE = 20;
 var DEFAULT_PERSON_IDS = [];
 var currentPersonId = null;
-var my_logging = true; // Включить/выключить логирование
-var cache = {}; // Кэш персон
+var my_logging = true;
+var cache = {};
 
 // === Переводы ===
 var pluginTranslations = {  
@@ -32,9 +32,7 @@ function getCurrentLanguage() {
 
 function initStorage() {
     var saved = Lampa.Storage.get(PERSONS_KEY);
-    if (!Array.isArray(saved) || saved.length === 0) {
-        Lampa.Storage.set(PERSONS_KEY, DEFAULT_PERSON_IDS);
-    }
+    if (!Array.isArray(saved)) Lampa.Storage.set(PERSONS_KEY, DEFAULT_PERSON_IDS);
 }
 
 function getPersonIds() {
@@ -47,9 +45,9 @@ function togglePersonSubscription(personId) {
     var idx = ids.indexOf(personId);
     if (idx === -1) {
         ids.push(personId);
-    } else {        ids.splice(idx, 1);
-    }
-    Lampa.Storage.set(PERSONS_KEY, ids);
+    } else {
+        ids.splice(idx, 1);
+    }    Lampa.Storage.set(PERSONS_KEY, ids);
     return idx === -1;
 }
 
@@ -63,7 +61,6 @@ function clearCache() {
 
 // === Кнопка подписки ===
 function addButtonToContainer(bottomBlock) {
-    // Удаляем старую кнопку
     var oldBtn = bottomBlock.querySelector('.button--subscribe-plugin');
     if (oldBtn) oldBtn.remove();
 
@@ -79,7 +76,7 @@ function addButtonToContainer(bottomBlock) {
     btn.innerHTML = `
         <svg width="25" height="30" viewBox="0 0 25 30" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M6.01892 24C6.27423 27.3562 9.07836 30 12.5 30C15.9216 30 18.7257 27.3562 18.981 24H15.9645C15.7219 25.6961 14.2632 27 12.5 27C10.7367 27 9.27804 25.6961 9.03542 24H6.01892Z" fill="currentColor"></path>
-            <path d="M3.81972 14.5957V10.2679C3.81972 5.41336 7.7181 1.5 12.5 1.5C17.2819 1.5 21.1803 5.413321.1803 10.2679V14.5957C21.1803 15.8462 21.5399 17.0709 22.2168 18.1213L23.0727 19.4494C24.2077 21.2106 22.9392 23.5 20.9098 23.5H4.09021C2.06084 23.5 0.792282 21.2106 1.9273 19.4494L2.78317 18.1213C3.46012 17.0709 3.81972 15.8462 3.81972 14.5957Z" stroke="currentColor" stroke-width="2.5" fill="transparent"></path>
+            <path d="M3.81972 14.5957V10.2679C3.81972 5.41336 7.7181 1.5 12.5 1.5C17.2819 1.5 21.1803 5.41336 21.1803 10.2679V14.5957C21.1803 15.8462 21.5399 17.0709 22.2168 18.1213L23.0727 19.4494C24.2077 21.2106 22.9392 23.5 20.9098 23.5H4.09021C2.06084 23.5 0.792282 21.2106 1.9273 19.4494L2.78317 18.1213C3.46012 17.0709 3.81972 15.8462 3.81972 14.5957Z" stroke="currentColor" stroke-width="2.5" fill="transparent"></path>
         </svg>
         <span>${buttonText}</span>`;
 
@@ -96,13 +93,12 @@ function addButtonToContainer(bottomBlock) {
     });
 
     var buttonsContainer = bottomBlock.querySelector('.full-start__buttons') || bottomBlock;
-    buttonsContainer.appendChild(btn);    log("[PERSON-PLUGIN] Button added for person ID:", currentPersonId);
-    return btn;
+    buttonsContainer.appendChild(btn);
+    log("[PERSON-PLUGIN] ✅ Button added for person ID:", currentPersonId);
 }
-
 function addSubscribeButton() {
     if (!currentPersonId) {
-        error("[PERSON-PLUGIN] ❌ No person ID — cannot add button");
+        error("[PERSON-PLUGIN] ❌ No person ID — skipping button");
         return;
     }
 
@@ -110,31 +106,34 @@ function addSubscribeButton() {
     if (container) {
         addButtonToContainer(container);
     } else {
-        log("[PERSON-PLUGIN] ⏳ Waiting for .person-start__bottom...");
-        var attempts = 0;
-        var timer = setInterval(function() {
-            attempts++;
-            container = document.querySelector('.person-start__bottom');
-            if (container) {
-                clearInterval(timer);
-                addButtonToContainer(container);
-            } else if (attempts >= 15) {
-                clearInterval(timer);
-                error("[PERSON-PLUGIN] ❌ Container not found after 15 attempts");
+        // Попробуем через MutationObserver — надёжнее, чем setTimeout
+        var observer = new MutationObserver(function(mutations) {
+            var el = document.querySelector('.person-start__bottom');
+            if (el) {
+                observer.disconnect();
+                addButtonToContainer(el);
             }
-        }, 200);
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+        
+        // Фолбэк на 5 секунд
+        setTimeout(() => {
+            observer.disconnect();
+            var el = document.querySelector('.person-start__bottom');
+            if (el) addButtonToContainer(el);
+            else error("[PERSON-PLUGIN] ❌ Container still not found after 5s");
+        }, 5000);
     }
 }
 
 function updatePersonsList() {
     var act = Lampa.Activity.active();
     if (act && act.component === 'category_full' && act.source === PLUGIN_NAME) {
-        log("[PERSON-PLUGIN] 🔄 Reloading persons list");
         Lampa.Activity.reload();
     }
 }
 
-// === Стили кнопки ===
+// === Стили ===
 function addButtonStyles() {
     if (document.getElementById('subscribe-button-styles')) return;
     var style = document.createElement('style');
@@ -145,8 +144,8 @@ function addButtonStyles() {
     `;
     document.head.appendChild(style);
 }
-// === Сервис персон ===
-function PersonsService() {
+
+// === Сервис персон — КЛЮЧЕВОЙ БЛОК ===function PersonsService() {
     this.list = function(params, onComplete, onError) {
         var page = parseInt(params.page, 10) || 1;
         var start = (page - 1) * PAGE_SIZE;
@@ -156,7 +155,12 @@ function PersonsService() {
         var pageIds = ids.slice(start, end);
 
         if (pageIds.length === 0) {
-            return onComplete({ results: [], page, total_pages: Math.ceil(ids.length / PAGE_SIZE), total_results: ids.length });
+            return onComplete({
+                results: [],
+                page: page,
+                total_pages: Math.ceil(ids.length / PAGE_SIZE),
+                total_results: ids.length
+            });
         }
 
         var loaded = 0;
@@ -173,36 +177,37 @@ function PersonsService() {
 
                 var url = Lampa.TMDB.api(`person/${id}?api_key=${Lampa.TMDB.key()}&language=${lang}&append_to_response=movie_credits`);
 
-                new Lampa.Reguest().silent(url function(res) {
+                new Lampa.Reguest().silent(url, function(res) {
                     try {
-                        var json = typeof res === 'string' ? JSON.parse(res) : res;
+                        var json = typeof res === '' ? JSON.parse(res) : res;
                         if (json && json.id && json.name) {
+                            // 🔑 ОБЯЗАТЕЛЬНО: type = "person", НЕ "actor"
                             var card = {
                                 id: json.id,
                                 title: json.name,
                                 name: json.name,
-                                poster_path: json.profile_path,
+                                poster json.profile_path,
                                 profile_path: json.profile_path,
-                                type: "actor",
-                                source: PLUGIN_NAME,           // ← КРИТИЧЕСКИ ВАЖНО
+                                type: "person",                // ← ЭТО РЕШАЕТ 404!
+                                source: PLUGIN_NAME,
                                 original_type: "person",
                                 media_type: "person",
-                                component: "actor",            // ← ОБЯЗАТЕЛЬНО для открытия как актёра
+                                component: "actor",            // для совместимости
                                 known_for_department: json.known_for_department,
-                                gender: json.gender || 0,
-                                popularity: json.popularity || 0,
+                                gender: json.gender || 0,                                popularity: json.popularity || 0,
                                 movie_credits: json.movie_credits || {}
                             };
                             cache[id] = card;
-                            results.push(card);                        } else {
-                            error("[PERSON-PLUGIN] ❌ Invalid person response for ID", id, json);
+                            results.push(card);
+                        } else {
+                            error("[PERSON-PLUGIN] ❌ Invalid response for ID", id, json);
                         }
                     } catch (e) {
                         error("[PERSON-PLUGIN] Parse error for ID", id, e);
                     }
                     checkComplete();
                 }, function(err) {
-                    error("[PERSON-PLUGIN] Request failed for person", id, err);
+                    error("[PERSON-PLUGIN] Request failed for ID", id, err);
                     checkComplete();
                 });
             })(pageIds[i]);
@@ -212,7 +217,7 @@ function PersonsService() {
             loaded++;
             if (loaded >= pageIds.length) {
                 var valid = results.filter(item => item && item.id);
-                valid.sort((a, b) => pageIds.indexOf(a.id) - page.indexOf(b.id));
+                valid.sort((a, b) => pageIds.indexOf(a.id) - pageIds.indexOf(b.id));
 
                 onComplete({
                     results: valid,
@@ -225,7 +230,7 @@ function PersonsService() {
     };
 }
 
-// === Запуск плагина ===
+// === Запуск ===
 function startPlugin() {
     // Добавляем переводы
     Lampa.Lang.add({
@@ -239,11 +244,11 @@ function startPlugin() {
     initStorage();
     var service = new PersonsService();
     Lampa.Api.sources[PLUGIN_NAME] = service;
-
     // Меню
     var menuItem = $(`
         <li class="menu__item selector" data-action="${PLUGIN_NAME}">
-            <div class="menu__ico">${ICON_SVG}</div>            <div class="menu__text">${Lampa.Lang.translate('persons_plugin_title')}</div>
+            <div class="menu__ico">${ICON_SVG}</div>
+            <div class="menu__text">${Lampa.Lang.translate('persons_plugin_title')}</div>
         </li>
     `);
 
@@ -255,7 +260,7 @@ function startPlugin() {
             page: 1,
             url: PLUGIN_NAME + '__main'
         }).catch(err => {
-            error("[PERSON-PLUGIN] ❌ Failed to open persons list:", err);
+            error("[PERSON-PLUGIN] ❌ Open failed:", err);
             Lampa.Noty.show(Lampa.Lang.translate('persons_plugin_not_found'), 'error');
         });
     });
@@ -267,11 +272,10 @@ function startPlugin() {
         if (e.type === 'start' && e.component === 'actor') {
             log("[PERSON-PLUGIN] 🎯 Actor page started");
 
-            // Извлекаем ID безопасно
             var id = null;
-            if (e.object && e.object.id && e.object.media_type === 'person') {
+            if (e.object?.id && e.object.type === 'person') {
                 id = parseInt(e.object.id, 10);
-            } else if (e.params && e.params.id && e.params.media_type === 'person') {
+            } else if (e.params?.id && e.params.type === 'person') {
                 id = parseInt(e.params.id, 10);
             } else {
                 var m = location.pathname.match(/\/view\/actor\/(\d+)/);
@@ -280,30 +284,28 @@ function startPlugin() {
 
             if (id) {
                 currentPersonId = id;
-                log("[PERSON-PLUGIN] ✅ Found person ID:", id);
-                setTimeout(addSubscribeButton, 500); // небольшая задержка — чтобы DOM успел собраться
+                log("[PERSON-PLUGIN] ✅ Person ID set:", id);
+                setTimeout(addSubscribeButton, 800); // даем время на рендер
             } else {
-                error("[PERSON-PLUGIN] ❌ No valid person ID in activity");
+                error("[PERSON-PLUGIN] ❌ No valid person ID");
             }
         }
 
         if (e.type === 'resume' && e.component === 'category_full' && e.object?.source === PLUGIN_NAME) {
-            log("[PERSON-PLUGIN] 📋 Persons list resumed — reloading");
-            setTimeout(() => Lampa.Activity.reload(), 100);
-        }
+            setTimeout(() => Lampa.Activity.reload(), 100);        }
     });
-    // Слушатель изменений в хранилище
+
+    // Очистка кэша при изменении списка
     Lampa.Listener.follow('storage', function(e) {
         if (e.name === PERSONS_KEY) {
-            log("[PERSON-PLUGIN] 🧹 Clearing cache after subscription change");
             clearCache();
+            log("[PERSON-PLUGIN] 🧹 Cache cleared");
         }
     });
 
-    // Стили
     addButtonStyles();
 
-    // Отладка (оставьте для диагностики)
+    // Отладка
     window.personsPluginDebug = {
         cache: () => cache,
         subscribed: getPersonIds,
@@ -311,10 +313,10 @@ function startPlugin() {
         clearCache: clearCache
     };
 
-    log("[PERSON-PLUGIN] ✅ Plugin initialized successfully");
+    log("[PERSON-PLUGIN] ✅ FULLY READY");
 }
 
-// === Запуск ===
+// === Инициализация ===
 if (window.appready) {
     startPlugin();
 } else {
