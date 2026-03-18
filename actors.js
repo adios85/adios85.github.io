@@ -5,14 +5,10 @@
     var PERSONS_KEY = "saved_persons";
     var PAGE_SIZE = 20;
     var currentPersonId = null;
-    var my_logging = true;
+    var LOG = true;
 
     function log() {
-        if (my_logging) console.log.apply(console, arguments);
-    }
-
-    function error() {
-        if (my_logging) console.error.apply(console, arguments);
+        if (LOG) console.log.apply(console, arguments);
     }
 
     function getIds() {
@@ -78,7 +74,7 @@
 
         container.appendChild(btn);
 
-        log("BUTTON ADDED", currentPersonId);
+        log("BUTTON ADDED:", currentPersonId);
     }
 
     function PersonsService() {
@@ -117,27 +113,33 @@
 
                     var card = {
                         id: parseInt(j.id, 10),
+
                         title: j.name,
                         name: j.name,
+
                         poster_path: j.profile_path,
                         profile_path: j.profile_path,
 
                         type: "person",
                         card_type: "person",
-                        component: "actor",
 
-                        source: "tmdb", // 🔥 КРИТИЧНО
-                        media_type: "person"
+                        component: "actor",
+                        method: "person",
+
+                        source: "tmdb",
+                        media_type: "person",
+
+                        // 🔥 ГЛАВНЫЙ ФИКС
+                        url: "person/" + j.id
                     };
+
+                    log("CARD FIXED:", card);
 
                     cache[id] = card;
                     results.push(card);
 
-                    log("CARD OK", card);
-
                     check();
                 }, function() {
-                    error("LOAD FAIL", id);
                     check();
                 });
             });
@@ -154,19 +156,13 @@
             }
         };
 
-        // 🔥 ФИКС ТВОЕЙ ОШИБКИ
+        // 🔥 фикс ошибки full()
         this.full = function(params, onComplete, onError) {
-            log("FULL REDIRECT → TMDB", params);
+            log("FULL → TMDB", params);
 
-            try {
-                if (Lampa.Api.sources.tmdb && Lampa.Api.sources.tmdb.full) {
-                    Lampa.Api.sources.tmdb.full(params, onComplete, onError);
-                } else {
-                    error("TMDB FULL NOT FOUND");
-                    onError && onError();
-                }
-            } catch (e) {
-                error("FULL ERROR", e);
+            if (Lampa.Api.sources.tmdb && Lampa.Api.sources.tmdb.full) {
+                Lampa.Api.sources.tmdb.full(params, onComplete, onError);
+            } else {
                 onError && onError();
             }
         };
@@ -193,24 +189,22 @@
 
         $('.menu .menu__list').eq(0).append(item);
 
-        // событие открытия актёра
+        // отслеживание открытия актёра
         Lampa.Listener.follow('activity', function(e) {
 
             if (e.type === 'start' && (e.component === 'actor' || e.component === 'person')) {
 
                 currentPersonId = detectId(e);
 
-                log("DETECTED ID:", currentPersonId);
+                log("OPEN ACTOR:", currentPersonId);
 
                 if (currentPersonId) {
-                    waitContainer(function(el) {
-                        addButton(el);
-                    });
+                    waitContainer(addButton);
                 }
             }
         });
 
-        // если уже открыта страница
+        // если уже открыто
         setTimeout(function() {
             var act = Lampa.Activity.active();
 
