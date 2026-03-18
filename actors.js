@@ -11,12 +11,16 @@
         if (my_logging) console.log.apply(console, arguments);
     }
 
-    function getPersonIds() {
+    function error() {
+        if (my_logging) console.error.apply(console, arguments);
+    }
+
+    function getIds() {
         return Lampa.Storage.get(PERSONS_KEY, []);
     }
 
-    function togglePersonSubscription(id) {
-        var list = getPersonIds();
+    function toggle(id) {
+        var list = getIds();
         var i = list.indexOf(id);
 
         if (i === -1) list.push(id);
@@ -26,8 +30,8 @@
         return i === -1;
     }
 
-    function isSubscribed(id) {
-        return getPersonIds().includes(id);
+    function isSaved(id) {
+        return getIds().includes(id);
     }
 
     function detectId(activity) {
@@ -48,7 +52,7 @@
         (function check() {
             var el = document.querySelector('.person-start__bottom');
             if (el) cb(el);
-            else if (i++ < 20) setTimeout(check, 200);
+            else if (i++ < 25) setTimeout(check, 200);
         })();
     }
 
@@ -61,20 +65,20 @@
         var btn = document.createElement('div');
         btn.className = 'full-start__button selector button--subscribe-plugin';
 
-        function update() {
-            btn.innerHTML = '<span>' + (isSubscribed(currentPersonId) ? 'Отписаться' : 'Подписаться') + '</span>';
+        function render() {
+            btn.innerHTML = '<span>' + (isSaved(currentPersonId) ? 'Отписаться' : 'Подписаться') + '</span>';
         }
 
-        update();
+        render();
 
         btn.addEventListener('hover:enter', function() {
-            togglePersonSubscription(currentPersonId);
-            update();
+            toggle(currentPersonId);
+            render();
         });
 
         container.appendChild(btn);
 
-        log("BUTTON ADDED");
+        log("BUTTON ADDED", currentPersonId);
     }
 
     function PersonsService() {
@@ -82,7 +86,7 @@
 
         this.list = function(params, done) {
             var page = parseInt(params.page || 1, 10);
-            var ids = getPersonIds();
+            var ids = getIds();
 
             var slice = ids.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
@@ -108,6 +112,7 @@
                 );
 
                 new Lampa.Reguest().silent(url, function(r) {
+
                     var j = typeof r === 'string' ? JSON.parse(r) : r;
 
                     var card = {
@@ -121,17 +126,20 @@
                         card_type: "person",
                         component: "actor",
 
-                        source: "tmdb", // ← КЛЮЧЕВОЕ
+                        source: "tmdb", // 🔥 КРИТИЧНО
                         media_type: "person"
                     };
-
-                    log("CARD:", card);
 
                     cache[id] = card;
                     results.push(card);
 
+                    log("CARD OK", card);
+
                     check();
-                }, check);
+                }, function() {
+                    error("LOAD FAIL", id);
+                    check();
+                });
             });
 
             function check() {
@@ -143,6 +151,23 @@
                         total_pages: Math.ceil(ids.length / PAGE_SIZE)
                     });
                 }
+            }
+        };
+
+        // 🔥 ФИКС ТВОЕЙ ОШИБКИ
+        this.full = function(params, onComplete, onError) {
+            log("FULL REDIRECT → TMDB", params);
+
+            try {
+                if (Lampa.Api.sources.tmdb && Lampa.Api.sources.tmdb.full) {
+                    Lampa.Api.sources.tmdb.full(params, onComplete, onError);
+                } else {
+                    error("TMDB FULL NOT FOUND");
+                    onError && onError();
+                }
+            } catch (e) {
+                error("FULL ERROR", e);
+                onError && onError();
             }
         };
     }
@@ -168,14 +193,14 @@
 
         $('.menu .menu__list').eq(0).append(item);
 
-        // события
+        // событие открытия актёра
         Lampa.Listener.follow('activity', function(e) {
 
             if (e.type === 'start' && (e.component === 'actor' || e.component === 'person')) {
 
                 currentPersonId = detectId(e);
 
-                log("ID:", currentPersonId);
+                log("DETECTED ID:", currentPersonId);
 
                 if (currentPersonId) {
                     waitContainer(function(el) {
@@ -185,11 +210,12 @@
             }
         });
 
-        // если уже на странице актера
+        // если уже открыта страница
         setTimeout(function() {
             var act = Lampa.Activity.active();
 
             if (act && (act.component === 'actor' || act.component === 'person')) {
+
                 currentPersonId = detectId(act);
 
                 if (currentPersonId) {
