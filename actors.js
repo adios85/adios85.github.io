@@ -113,24 +113,17 @@
 
                     var card = {
                         id: parseInt(j.id, 10),
-
                         title: j.name,
                         name: j.name,
-
                         poster_path: j.profile_path,
                         profile_path: j.profile_path,
-
                         type: "person",
                         card_type: "person",
-
-                        component: "actor",
-                        method: "person",
-
+                        component: "person",  // ✅ Жёсткий фикс
+                        method: "person",     // ✅ Жёсткий фикс
+                        url: "person/" + j.id,// ✅ Жёсткий фикс
                         source: "tmdb",
-                        media_type: "person",
-
-                        // 🔥 ГЛАВНЫЙ ФИКС
-                        url: "person/" + j.id
+                        media_type: "person"
                     };
 
                     log("CARD FIXED:", card);
@@ -156,11 +149,12 @@
             }
         };
 
-        // 🔥 фикс ошибки full()
+        // 🔥 Фикс full
         this.full = function(params, onComplete, onError) {
-            log("FULL → TMDB", params);
-
-            if (Lampa.Api.sources.tmdb && Lampa.Api.sources.tmdb.full) {
+            if (params && params.method === "person") {
+                // Если метод person → ничего не делаем, Lampa откроет actor-page
+                onComplete && onComplete(params);
+            } else if (Lampa.Api.sources.tmdb && Lampa.Api.sources.tmdb.full) {
                 Lampa.Api.sources.tmdb.full(params, onComplete, onError);
             } else {
                 onError && onError();
@@ -169,14 +163,10 @@
     }
 
     function start() {
-
-        if (!Lampa.Storage.get(PERSONS_KEY)) {
-            Lampa.Storage.set(PERSONS_KEY, []);
-        }
+        if (!Lampa.Storage.get(PERSONS_KEY)) Lampa.Storage.set(PERSONS_KEY, []);
 
         Lampa.Api.sources[PLUGIN_NAME] = new PersonsService();
 
-        // меню
         var item = $('<li class="menu__item selector"><div class="menu__text">Персоны</div></li>');
 
         item.on('hover:enter', function() {
@@ -189,7 +179,6 @@
 
         $('.menu .menu__list').eq(0).append(item);
 
-        // отслеживание открытия актёра
         Lampa.Listener.follow('activity', function(e) {
 
             if (e.type === 'start' && (e.component === 'actor' || e.component === 'person')) {
@@ -198,23 +187,16 @@
 
                 log("OPEN ACTOR:", currentPersonId);
 
-                if (currentPersonId) {
-                    waitContainer(addButton);
-                }
+                if (currentPersonId) waitContainer(addButton);
             }
         });
 
-        // если уже открыто
         setTimeout(function() {
             var act = Lampa.Activity.active();
 
             if (act && (act.component === 'actor' || act.component === 'person')) {
-
                 currentPersonId = detectId(act);
-
-                if (currentPersonId) {
-                    waitContainer(addButton);
-                }
+                if (currentPersonId) waitContainer(addButton);
             }
         }, 1000);
     }
