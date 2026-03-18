@@ -7,10 +7,6 @@
 
     var currentCard = null;
 
-    function log() {
-        console.log.apply(console, arguments);
-    }
-
     // ================= STORAGE =================
 
     function getList() {
@@ -29,18 +25,8 @@
         var list = getList();
         var index = list.findIndex(i => i.id === card.id);
 
-        if (index === -1) {
-            list.push({
-                id: card.id,
-                type: 'person',                 // 🔥 КРИТИЧЕСКИЙ ФИКС
-                title: card.name,
-                name: card.name,
-                poster_path: card.profile_path,
-                profile_path: card.profile_path
-            });
-        } else {
-            list.splice(index, 1);
-        }
+        if (index === -1) list.push(card);
+        else list.splice(index, 1);
 
         saveList(list);
         return index === -1;
@@ -58,28 +44,12 @@
             activity.id ||
             (activity.params && activity.params.id);
 
-        if (!id) {
-            var match = location.pathname.match(/(person|actor)\/(\d+)/);
-            if (match) id = match[2];
-        }
-
         if (!id) return null;
-
-        var name =
-            obj.name ||
-            obj.title ||
-            document.querySelector('.full-start__title')?.innerText ||
-            'Actor';
-
-        var poster =
-            obj.profile_path ||
-            document.querySelector('.full-start__poster img')?.getAttribute('src') ||
-            '';
 
         return {
             id: parseInt(id, 10),
-            name: name,
-            profile_path: poster
+            name: obj.name || obj.title || 'Actor',
+            profile_path: obj.profile_path || ''
         };
     }
 
@@ -112,19 +82,22 @@
         render();
 
         btn.addEventListener('hover:enter', function () {
-            toggle(currentCard);
+            toggle({
+                id: currentCard.id,
+                type: 'person',            // 🔥 важно
+                name: currentCard.name,
+                profile_path: currentCard.profile_path
+            });
+
             render();
         });
 
         container.appendChild(btn);
-
-        log('BUTTON OK:', currentCard);
     }
 
     // ================= SOURCE =================
 
     function PersonsSource() {
-        var cache = {};
 
         this.list = function (params, done) {
             var page = parseInt(params.page || 1, 10);
@@ -132,83 +105,49 @@
 
             var slice = list.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-            if (!slice.length) {
-                done({ results: [] });
-                return;
-            }
+            var results = slice.map(function (item) {
 
-            var loaded = 0;
-            var results = [];
+                return {
+                    id: item.id,
 
-            slice.forEach(function (item) {
+                    title: item.name,
+                    name: item.name,
 
-                if (cache[item.id]) {
-                    results.push(cache[item.id]);
-                    return check();
-                }
+                    poster_path: item.profile_path,
+                    profile_path: item.profile_path,
 
-                var url = Lampa.TMDB.api(
-                    'person/' + item.id +
-                    '?api_key=' + Lampa.TMDB.key() +
-                    '&language=ru'
-                );
+                    type: 'person',
+                    card_type: 'person',
 
-                new Lampa.Reguest().silent(url, function (r) {
+                    component: 'person',
+                    method: 'person',
 
-                    var j = typeof r === 'string' ? JSON.parse(r) : r;
-
-                    var card = {
-                        id: parseInt(j.id, 10),
-
-                        title: j.name,
-                        name: j.name,
-
-                        poster_path: j.profile_path,
-                        profile_path: j.profile_path,
-
-                        type: 'person',
-                        card_type: 'person',
-
-                        component: 'person',   // ✅ фикс
-                        method: 'person',
-
-                        source: 'tmdb',
-                        media_type: 'person',
-
-                        url: 'person/' + j.id  // ✅ фикс
-                    };
-
-                    cache[item.id] = card;
-                    results.push(card);
-
-                    log('CARD OK:', card);
-
-                    check();
-
-                }, function () {
-                    check();
-                });
+                    source: PLUGIN_NAME,     // 🔥 НЕ tmdb
+                    media_type: 'person'
+                };
             });
 
-            function check() {
-                loaded++;
-                if (loaded >= slice.length) {
-                    done({
-                        results: results,
-                        page: page,
-                        total_pages: Math.ceil(list.length / PAGE_SIZE)
-                    });
-                }
-            }
+            done({
+                results: results,
+                page: page,
+                total_pages: Math.ceil(list.length / PAGE_SIZE)
+            });
         };
 
-        // фикс ошибки full()
+        // 🔥 САМОЕ ГЛАВНОЕ — ручное открытие
         this.full = function (params, onComplete, onError) {
-            if (Lampa.Api.sources.tmdb && Lampa.Api.sources.tmdb.full) {
-                Lampa.Api.sources.tmdb.full(params, onComplete, onError);
-            } else {
-                onError && onError();
-            }
+
+            var id = params.card.id;
+
+            // напрямую открываем TMDB person
+            Lampa.Activity.push({
+                component: 'person',
+                source: 'tmdb',
+                method: 'person',
+                id: id
+            });
+
+            onError && onError();
         };
     }
 
@@ -242,26 +181,11 @@
 
                 currentCard = detectCard(e);
 
-                log('OPEN:', currentCard);
-
                 if (currentCard) {
                     waitContainer(addButton);
                 }
             }
         });
-
-        // если уже открыт
-        setTimeout(function () {
-            var act = Lampa.Activity.active();
-
-            if (act && (act.component === 'person' || act.component === 'actor')) {
-                currentCard = detectCard(act);
-
-                if (currentCard) {
-                    waitContainer(addButton);
-                }
-            }
-        }, 1000);
     }
 
     if (window.appready) start();
