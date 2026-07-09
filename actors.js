@@ -4,9 +4,7 @@
 var PLUGIN_NAME = "persons_plugin";  
 var PERSONS_KEY = "saved_persons";  
 var PAGE_SIZE = 20;  
-var DEFAULT_PERSON_IDS = [];  
 var currentPersonId = null;  
-var my_logging = true; 
   
 var pluginTranslations = {  
     persons_title: { ru: "Персоны", en: "Persons" },  
@@ -17,15 +15,9 @@ var pluginTranslations = {
   
 var ICON_SVG = '<svg height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16 11C17.66 11 18.99 9.66 18.99 8C18.99 6.34 17.66 5 16 5C14.34 5 13 6.34 13 8C13 9.66 14.34 11 16 11ZM8 11C9.66 11 10.99 9.66 10.99 8C10.99 6.34 9.66 5 8 5C6.34 5 5 6.34 5 8C5 9.66 6.34 11 8 11ZM8 13C5.67 13 1 14.17 1 16.5V19H15V16.5C15 14.17 10.33 13 8 13ZM16 13C15.71 13 15.38 13.02 15.03 13.05C16.19 13.89 17 15.02 17 16.5V19H23V16.5C23 14.17 18.33 13 16 13Z" fill="currentColor"/></svg>';  
   
-function log() {  
-    if (my_logging && console && console.log) {  
-        try { console.log.apply(console, arguments); } catch (e) {}  
-    }  
-}  
-  
 function initStorage() {  
     var current = Lampa.Storage.get(PERSONS_KEY);  
-    if (!current || current.length === 0) Lampa.Storage.set(PERSONS_KEY, DEFAULT_PERSON_IDS);  
+    if (!current || current.length === 0) Lampa.Storage.set(PERSONS_KEY, []);  
 }  
   
 function getPersonIds() {  
@@ -138,11 +130,12 @@ function PersonsService() {
                         if (json && json.id) {  
                             var personCard = {  
                                 id: json.id,  
+                                plugin_person_id: json.id, // Резервный ID, на который Lampa не сможет повлиять
                                 title: json.name,  
                                 name: json.name,  
                                 poster_path: json.profile_path,  
                                 profile_path: json.profile_path,
-                                is_person_plugin: true // Флаг для нашего перехватчика
+                                is_person_plugin: true // Флаг для нашего DOM-перехватчика
                             };  
                             cache[personId] = personCard;  
                             results.push(personCard);  
@@ -157,7 +150,7 @@ function PersonsService() {
             loaded++;  
             if (loaded >= pageIds.length) {  
                 var validResults = results.filter(function(item) { return !!item; });  
-                validResults.sort(function(a, b) { return pageIds.indexOf(a.id) - pageIds.indexOf(b.id); });  
+                validResults.sort(function(a, b) { return pageIds.indexOf(a.plugin_person_id) - pageIds.indexOf(b.plugin_person_id); });  
                 onComplete({ results: validResults, page: page, total_pages: Math.ceil(personIds.length / PAGE_SIZE), total_results: personIds.length });  
             }  
         }  
@@ -165,43 +158,38 @@ function PersonsService() {
 }  
 
 function startPlugin() {  
-    // --- ЗАЩИТА ОТ ПЕРЕЗАПИСИ СОБЫТИЯ КЛИКА В LAMPA ---
-    if (!window.personPluginCardHooked && Lampa.Card && Lampa.Card.prototype) {
+    // === ФИНАЛЬНЫЙ ПЕРЕХВАТЧИК НА УРОВНЕ HTML/DOM ===
+    if (!window.personPluginDOMHooked && Lampa.Card && Lampa.Card.prototype) {
         var origCreate = Lampa.Card.prototype.create;
         Lampa.Card.prototype.create = function() {
-            // Сначала вызываем оригинальный метод, который строит DOM-элемент
+            // Разрешаем Lampa создать HTML-элемент карточки
             origCreate.apply(this, arguments);
             
-            // Если карточка пришла из нашего плагина
+            // Если это наша карточка с актером
             if (this.data && this.data.is_person_plugin) {
                 var self = this;
                 
-                // Создаем правильную функцию открытия актера
-                var customEnter = function() {
-                    // Динамически проверяем поддержку компонента в версии Lampa
-                    var targetComponent = Lampa.Component.get('person') ? 'person' : 'actor';
-                    log("[PERSON-PLUGIN] Открываем карточку персоны через", targetComponent, self.data.id);
+                // Жестко удаляем все системные обработчики Lampa с этой карточки
+                this.html.off('hover:enter hover:click hover:touch click');
+                
+                // Вешаем свой изолированный обработчик
+                this.html.on('hover:enter hover:click click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
                     
+                    var targetComponent = Lampa.Component.get('person') ? 'person' : 'actor';
+                    
+                    // Сами отправляем правильную команду ядру
                     Lampa.Activity.push({
                         component: targetComponent,
-                        id: self.data.id
+                        id: self.data.plugin_person_id
                     });
-                };
-                
-                // Используем Object.defineProperty, чтобы сделать onEnter "неубиваемым".
-                // Теперь, когда category_full попытается повесить туда фильм, он просто проигнорируется.
-                Object.defineProperty(this, 'onEnter', {
-                    get: function() { return customEnter; },
-                    set: function(val) { 
-                        log("[PERSON-PLUGIN] Предотвращена попытка Lampa перезаписать клик карточки");
-                    },
-                    configurable: true
                 });
             }
         };
-        window.personPluginCardHooked = true;
+        window.personPluginDOMHooked = true; // Защита от двойного хука
     }
-    // ---------------------------------------------------
+    // ================================================
 
     Lampa.Lang.add({  
         persons_plugin_title: pluginTranslations.persons_title,  
