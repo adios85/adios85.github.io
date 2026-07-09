@@ -29,7 +29,7 @@ var pluginTranslations = {
         be: "Падпісацца",  
         pt: "Inscrever",  
         zh: "订阅",  
-        he: "הירשם",  
+        he: "הירшם",  
         cs: "Přihlásit se",  
         bg: "Абонирай се"  
     },  
@@ -40,7 +40,7 @@ var pluginTranslations = {
         be: "Адпісацца",  
         pt: "Cancelar inscrição",  
         zh: "退订",  
-        he: "בטל מנוי",  
+        he: "בטל מנוи",  
         cs: "Odhlásit se",  
         bg: "Отписване"  
     },  
@@ -83,7 +83,6 @@ function getCurrentLanguage() {
     return lang || 'en';  
 }  
   
-// Обновленные функции работы с хранилищем  
 function initStorage() {  
     var current = Lampa.Storage.get(PERSONS_KEY);  
     if (!current || current.length === 0) {  
@@ -117,7 +116,6 @@ function isPersonSubscribed(personId) {
 function addButtonToContainer(bottomBlock) {  
     log("[PERSON-PLUGIN] Container found, adding button");  
       
-    // Удаление существующей кнопки  
     var existingButton = bottomBlock.querySelector('.button--subscribe-plugin');  
     if (existingButton && existingButton.parentNode) {  
         existingButton.parentNode.removeChild(existingButton);  
@@ -128,7 +126,6 @@ function addButtonToContainer(bottomBlock) {
         Lampa.Lang.translate('persons_plugin_unsubscribe') :   
         Lampa.Lang.translate('persons_plugin_subscribe');  
       
-    // Создание кнопки  
     var button = document.createElement('div');  
     button.className = 'full-start__button selector button--subscribe-plugin';  
     button.classList.add(isSubscribed ? 'button--unsubscribe' : 'button--subscribe');  
@@ -141,7 +138,6 @@ function addButtonToContainer(bottomBlock) {
         '</svg>' +  
         '<span>' + buttonText + '</span>';  
       
-    // Обработчик нажатия  
     button.addEventListener('hover:enter', function() {  
         var wasAdded = togglePersonSubscription(currentPersonId);  
         var newText = wasAdded ?   
@@ -156,7 +152,6 @@ function addButtonToContainer(bottomBlock) {
         updatePersonsList();  
     });  
       
-    // Вставка кнопки  
     var buttonsContainer = bottomBlock.querySelector('.full-start__buttons');  
     if (buttonsContainer) {  
         buttonsContainer.append(button);  
@@ -164,6 +159,11 @@ function addButtonToContainer(bottomBlock) {
         bottomBlock.append(button);  
     }  
       
+    // Переинициализация фокуса Lampa, чтобы кнопка стала кликабельной на ТВ
+    if (window.Lampa && Lampa.Controller) {
+        Lampa.Controller.toggle('content');
+    }
+    
     log("[PERSON-PLUGIN] Button added successfully");  
     return button;  
 }  
@@ -174,38 +174,34 @@ function addSubscribeButton() {
         return;  
     }  
       
-    // Пытаемся найти контейнер  
-    var bottomBlock = document.querySelector('.person-start__bottom');  
+    var bottomBlock = document.querySelector('.person-start__bottom') || document.querySelector('.actor-start__bottom');  
       
     if (bottomBlock) {  
         addButtonToContainer(bottomBlock);  
     } else {  
         log("[PERSON-PLUGIN] Waiting for container to appear...");  
           
-        // Используем setTimeout для проверки появления элемента  
         var attempts = 0;  
-        var maxAttempts = 10;  
+        var maxAttempts = 15;  
           
         function checkContainer() {  
             attempts++;  
-            var container = document.querySelector('.person-start__bottom');  
+            var container = document.querySelector('.person-start__bottom') || document.querySelector('.actor-start__bottom');  
               
             if (container) {  
                 addButtonToContainer(container);  
             } else if (attempts < maxAttempts) {  
-                setTimeout(checkContainer, 300);  
+                setTimeout(checkContainer, 200);  
             } else {  
                 error("[PERSON-PLUGIN] Container not found after max attempts");  
             }  
         }  
           
-        setTimeout(checkContainer, 300);  
+        setTimeout(checkContainer, 200);  
     }  
-
 }  
   
 function updatePersonsList() {  
-    // Проверяем, находимся ли мы на странице плагина  
     var activity = Lampa.Activity.active();  
     if (activity && activity.component === 'category_full' && activity.source === PLUGIN_NAME) {  
         log("[PERSON-PLUGIN] Updating persons list");  
@@ -232,9 +228,8 @@ function addButtonStyles() {
     document.head.appendChild(style);  
 }  
 
-// Класс для сервиса персон в стиле ES5  
+// Класс сервиса
 function PersonsService() {  
-    var self = this;  
     var cache = {};  
       
     this.list = function(params, onComplete, onError) {  
@@ -285,7 +280,7 @@ function PersonsService() {
                                 name: json.name,  
                                 poster_path: json.profile_path,  
                                 profile_path: json.profile_path,  
-                                type: "actor",  
+                                type: "person",  
                                 source: "tmdb",  
                                 original_type: "person",  
                                 media_type: "person",  
@@ -331,15 +326,11 @@ function PersonsService() {
 }  
 
 function startPlugin() {  
-    // Добавляем переводы в Lampa  
     Lampa.Lang.add({  
-        // Переводы для интерфейса плагина  
         persons_plugin_title: pluginTranslations.persons_title,  
         persons_plugin_subscribe: pluginTranslations.subscribe,  
         persons_plugin_unsubscribe: pluginTranslations.unsubscribe,  
         persons_plugin_not_found: pluginTranslations.persons_not_found,  
-          
-        // Совместимость со старыми ключами  
         persons_title: pluginTranslations.persons_title  
     });  
       
@@ -348,7 +339,7 @@ function startPlugin() {
     var personsService = new PersonsService();  
     Lampa.Api.sources[PLUGIN_NAME] = personsService;  
       
-    // Создаем пункт меню  
+    // Меню  
     var menuItem = $(  
         '<li class="menu__item selector" data-action="' + PLUGIN_NAME + '">' +  
             '<div class="menu__ico">' + ICON_SVG + '</div>' +  
@@ -368,110 +359,53 @@ function startPlugin() {
       
     $(".menu .menu__list").eq(0).append(menuItem);  
       
-    // Функция для ожидания появления контейнера  
-    function waitForContainer(callback) {  
-        log("[PERSON-PLUGIN] Waiting for container to appear...");  
-        var attempts = 0;  
-        var maxAttempts = 15; // 15 попыток * 200ms = 3 секунды  
-        var containerSelector = '.person-start__bottom';  
-          
-        function check() {  
-            attempts++;  
-            var container = document.querySelector(containerSelector);  
-              
-            if (container) {  
-                log("[PERSON-PLUGIN] Container found after", attempts, "attempts");  
-                callback();  
-            } else if (attempts < maxAttempts) {  
-                setTimeout(check, 200);  
-            } else {  
-                error("[PERSON-PLUGIN] Container not found after max attempts");  
-            }  
-        }  
-          
-        // Проверяем сразу, может контейнер уже есть  
-        var initialCheck = document.querySelector(containerSelector);  
-        if (initialCheck) {  
-            log("[PERSON-PLUGIN] Container found immediately");  
-            callback();  
-        } else {  
-            setTimeout(check, 300);  
-        }  
-    }  
+    // Универсальный парсер ID  
+    function extractPersonId(activity) {
+        if (!activity) return null;
+        if (activity.id) return parseInt(activity.id, 10);
+        if (activity.params && activity.params.id) return parseInt(activity.params.id, 10);
+        if (activity.object && activity.object.id) return parseInt(activity.object.id, 10);
+        return null;
+    }
+
+    function checkAndAttach(activity) {
+        if (!activity) return;
+        var comp = activity.component;
+        if (comp === 'person' || comp === 'actor') {
+            var id = extractPersonId(activity);
+            if (id) {
+                currentPersonId = id;
+                log("[PERSON-PLUGIN] Target component active, ID:", currentPersonId);
+                addSubscribeButton();
+            }
+        }
+    }
       
-    // Улучшенная проверка текущей активности при запуске  
-    function checkCurrentActivity() {  
-        log("[PERSON-PLUGIN] Checking current activity on startup");  
-        var activity = Lampa.Activity.active();  
-          
-        if (activity && activity.component === 'actor') {  
-            log("[PERSON-PLUGIN] Current activity is actor page");  
-              
-            // Получаем ID из разных возможных источников  
-            if (activity.id) {  
-                currentPersonId = parseInt(activity.id, 10);  
-            }   
-            else if (activity.params && activity.params.id) {  
-                currentPersonId = parseInt(activity.params.id, 10);  
-            }  
-            // Если ID не найден в стандартных местах, пробуем из URL  
-            else {  
-                var match = location.pathname.match(/\/view\/actor\/(\d+)/);  
-                if (match && match[1]) {  
-                    currentPersonId = parseInt(match[1], 10);  
-                    log("[PERSON-PLUGIN] Got actor ID from URL:", currentPersonId);  
-                }  
-            }  
-              
-            if (currentPersonId) {  
-                log("[PERSON-PLUGIN] Found actor ID:", currentPersonId);  
-                  
-                // Используем улучшенное ожидание контейнера  
-                waitForContainer(function() {  
-                    addSubscribeButton();  
-                });  
-            } else {  
-                error("[PERSON-PLUGIN] No ID found in current activity");  
-            }  
-        }  
-    }  
-      
-    // Слушаем события активности  
+    // Следим за изменениями активности
     Lampa.Listener.follow('activity', function(e) {  
         log("[PERSON-PLUGIN] Activity event:", e.type, "component:", e.component);  
           
-        // Для страницы актера  
-        if (e.type === 'start' && e.component === 'actor') {  
-            log("[PERSON-PLUGIN] Actor page started");  
-              
-            if (e.object && e.object.id) {  
-                currentPersonId = parseInt(e.object.id, 10);  
-                log("[PERSON-PLUGIN] Found actor ID in e.object.id:", currentPersonId);  
-                  
-                // Используем улучшенное ожидание контейнера  
-                waitForContainer(function() {  
-                    addSubscribeButton();  
-                });  
-            }  
+        if (e.type === 'start' || e.type === 'render') {  
+            checkAndAttach(e);
         }  
-        // При активации страницы плагина  
-        else if (e.type === 'resume' && e.component === 'category_full' && e.object && e.object.source === PLUGIN_NAME) {  
-            log("[PERSON-PLUGIN] Persons list resumed");  
-            // Обновляем список при возврате  
-            setTimeout(function() {  
-                Lampa.Activity.reload();  
-            }, 100);  
+        else if (e.type === 'resume') {
+            if (e.component === 'category_full' && e.object && e.object.source === PLUGIN_NAME) {  
+                log("[PERSON-PLUGIN] Persons list resumed");  
+                setTimeout(function() { Lampa.Activity.reload(); }, 100);  
+            } else {
+                checkAndAttach(e);
+            }
         }  
     });  
   
-    // Запускаем проверку текущей активности  
-    setTimeout(checkCurrentActivity, 1500);  
+    // Быстрая проверка на старте  
+    setTimeout(function() {
+        checkAndAttach(Lampa.Activity.active());
+    }, 1000);  
       
-    // Добавляем стили  
     addButtonStyles();  
 }  
 
-// Запуск плагина  
 if (window.appready) {  
     startPlugin();  
 } else {  
@@ -481,5 +415,4 @@ if (window.appready) {
         }  
     });  
 }
-
 }();
