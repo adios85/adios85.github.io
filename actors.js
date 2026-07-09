@@ -130,12 +130,12 @@ function PersonsService() {
                         if (json && json.id) {  
                             var personCard = {  
                                 id: json.id,  
-                                plugin_person_id: json.id, // Резервный ID, на который Lampa не сможет повлиять
+                                plugin_person_id: json.id, 
                                 title: json.name,  
                                 name: json.name,  
                                 poster_path: json.profile_path,  
                                 profile_path: json.profile_path,
-                                is_person_plugin: true // Флаг для нашего DOM-перехватчика
+                                is_person_plugin: true 
                             };  
                             cache[personId] = personCard;  
                             results.push(personCard);  
@@ -157,39 +157,37 @@ function PersonsService() {
     };  
 }  
 
-function startPlugin() {  
-    // === ФИНАЛЬНЫЙ ПЕРЕХВАТЧИК НА УРОВНЕ HTML/DOM ===
-    if (!window.personPluginDOMHooked && Lampa.Card && Lampa.Card.prototype) {
-        var origCreate = Lampa.Card.prototype.create;
-        Lampa.Card.prototype.create = function() {
-            // Разрешаем Lampa создать HTML-элемент карточки
-            origCreate.apply(this, arguments);
+function startPlugin() {
+    // Радикальный метод: Перехват события на этапе фазы погружения (capture phase)
+    // Вешаем слушатель на весь документ, чтобы перехватить клик до Lampa
+    document.addEventListener('click', function(e) {
+        var target = e.target.closest('.card');
+        if (target && target.dataset.is_person_plugin === "true") {
+            e.stopImmediatePropagation();
+            e.preventDefault();
             
-            // Если это наша карточка с актером
+            var personId = target.dataset.person_id;
+            var targetComponent = Lampa.Component.get('person') ? 'person' : 'actor';
+            
+            Lampa.Activity.push({
+                component: targetComponent,
+                id: personId
+            });
+        }
+    }, true); 
+
+    // Модифицируем отрисовку, чтобы пометить карточки для нашего слушателя
+    if (Lampa.Card && Lampa.Card.prototype) {
+        var origRender = Lampa.Card.prototype.render;
+        Lampa.Card.prototype.render = function() {
+            var el = origRender.apply(this, arguments);
             if (this.data && this.data.is_person_plugin) {
-                var self = this;
-                
-                // Жестко удаляем все системные обработчики Lampa с этой карточки
-                this.html.off('hover:enter hover:click hover:touch click');
-                
-                // Вешаем свой изолированный обработчик
-                this.html.on('hover:enter hover:click click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    
-                    var targetComponent = Lampa.Component.get('person') ? 'person' : 'actor';
-                    
-                    // Сами отправляем правильную команду ядру
-                    Lampa.Activity.push({
-                        component: targetComponent,
-                        id: self.data.plugin_person_id
-                    });
-                });
+                el.dataset.is_person_plugin = "true";
+                el.dataset.person_id = this.data.plugin_person_id;
             }
+            return el;
         };
-        window.personPluginDOMHooked = true; // Защита от двойного хука
     }
-    // ================================================
 
     Lampa.Lang.add({  
         persons_plugin_title: pluginTranslations.persons_title,  
